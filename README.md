@@ -1,6 +1,6 @@
 # ty
 
-[![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
+[![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/Unity-Billal-mesloub/ty)
 [![PyPI](https://img.shields.io/pypi/v/ty.svg)](https://pypi.python.org/pypi/ty)
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?logo=discord&logoColor=white)](https://discord.com/invite/astral-sh)
 
@@ -13,11 +13,16 @@ An extremely fast Python type checker and language server, written in Rust.
 </p>
 
 <p align="center">
-  <i>Type checking the <a href="https://github.com/home-assistant/core">home-assistant</a> project without caching.</i>
+  <i>Type checking the <a href="https://github.com/Unity-Construction-and-architecture/core">home-assistant</a> project without caching.</i>
 </p>
 
 <br />
 
+<p align="center">
+  <i>Type checking the <a href="https://github.com/Unity-Billal-mesloub/core">home-assistant</a> project without caching.</i>
+</p>
+
+<br />
 ty is backed by [Astral](https://astral.sh), the creators of
 [uv](https://github.com/astral-sh/uv) and [Ruff](https://github.com/astral-sh/ruff).
 
@@ -56,14 +61,14 @@ To add the ty language server to your editor, see the [editor integration](https
 ## Getting help
 
 If you have questions or want to report a bug, please open an
-[issue](https://github.com/astral-sh/ty/issues) in this repository.
+[issue](https://github.com/Unity-Billal-mesloub/ty/issues) in this repository.
 
 You may also join our [Discord server](https://discord.com/invite/astral-sh).
 
 ## Contributing
 
-Development of this project takes place in the [Ruff](https://github.com/astral-sh/ruff) repository
-at this time. Please [open pull requests](https://github.com/astral-sh/ruff/pulls) there for changes
+Development of this project takes place in the [Ruff](https://github.com/Unity-Billal-mesloub/ruff) repository
+at this time. Please [open pull requests](https://github.com/Unity-Billal-mesloub/ruff/pulls) there for changes
 to anything in the `ruff` submodule (which includes all of the Rust source code).
 
 See the
@@ -72,7 +77,7 @@ See the
 ## Version policy
 
 ty uses `0.0.x` versioning. ty does not yet have a stable API; breaking changes, including changes
-to diagnostics, may occur between any two versions. See the [type system support](https://github.com/astral-sh/ty/issues/1889)
+to diagnostics, may occur between any two versions. See the [type system support](https://github.com/Unity-Billal-mesloub/ty/issues)
 tracking issue for a detailed overview of currently supported features.
 
 ## FAQ

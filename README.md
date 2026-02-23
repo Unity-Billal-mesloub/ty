@@ -24,7 +24,7 @@ An extremely fast Python type checker and language server, written in Rust.
 
 <br />
 ty is backed by [Astral](https://astral.sh), the creators of
-[uv](https://github.com/astral-sh/uv) and [Ruff](https://github.com/astral-sh/ruff).
+[uv](https://github.com/Unity-Billal-mesloub/uv) and [Ruff](https://github.com/Unity-Billal-mesloub/ruff).
 
 ty is currently in [beta](#version-policy).
 

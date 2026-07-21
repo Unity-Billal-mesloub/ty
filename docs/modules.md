@@ -22,10 +22,19 @@ example-pkg
 
 then set [`environment.root`](./reference/configuration.md#root) in your `pyproject.toml` to `["./app"]`:
 
-```toml title="pyproject.toml"
-[tool.ty.environment]
-root = ["./app"]
-```
+=== "pyproject.toml"
+
+    ```toml
+    [tool.ty.environment]
+    root = ["./app"]
+    ```
+
+=== "ty.toml"
+
+    ```toml
+    [environment]
+    root = ["./app"]
+    ```
 
 Note that a `./python` folder is automatically added to the project `root` if it exists,
 and is not itself a package (i.e. does not contain an `__init__.py` file or an
@@ -60,3 +69,14 @@ The Python environment may be explicitly configured using the
 [`--python`](./reference/cli.md#ty-check--python) flag.
 
 When setting the environment explicitly, non-virtual environments can be provided.
+
+### `PYTHONPATH`
+
+ty also respects the [`PYTHONPATH`](./reference/environment.md#pythonpath) environment variable.
+Each existing directory listed in `PYTHONPATH` is added to the module search path, just after any
+[`extra-paths`](./reference/configuration.md#extra-paths) and before the environment's
+`site-packages`, mirroring the resolution order of the Python interpreter itself.
+
+`PYTHONPATH` uses the same format as the shell's `PATH`: one or more directory paths separated by the
+platform's path separator (`:` on Unix, `;` on Windows). Entries that don't exist or aren't
+directories are ignored.

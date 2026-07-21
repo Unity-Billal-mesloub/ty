@@ -119,7 +119,7 @@ within a few milliseconds, even on large projects.
 
 | Feature                                               | Status           | Notes                                                         |
 | ----------------------------------------------------- | ---------------- | ------------------------------------------------------------- |
-| [`callHierarchy/*`][callhierarchy]                    | ❌ Not supported | [#1976]                                                       |
+| [`callHierarchy/*`][callhierarchy]                    | ✅ Supported     |                                                               |
 | [`notebookDocument/*`][notebookdocument]              | ✅ Supported     |                                                               |
 | [`textDocument/codeAction`][codeaction]               | ✅ Supported     | Quick fixes                                                   |
 | [`textDocument/codeLens`][codelens]                   | ❌ Not supported |                                                               |
@@ -134,7 +134,7 @@ within a few milliseconds, even on large projects.
 | [`textDocument/foldingRange`][foldingrange]           | ✅ Supported     |                                                               |
 | [`textDocument/formatting`][formatting]               | —                | Use [Ruff] for formatting                                     |
 | [`textDocument/hover`][hover]                         | ✅ Supported     |                                                               |
-| [`textDocument/implementation`][implementation]       | ❌ Not supported |                                                               |
+| [`textDocument/implementation`][implementation]       | ❌ Not supported | [#3514]                                                       |
 | [`textDocument/inlayHint`][inlayhint]                 | ✅ Supported     |                                                               |
 | [`textDocument/onTypeFormatting`][ontypeformatting]   | —                | [Ruff #16829](https://github.com/astral-sh/ruff/issues/16829) |
 | [`textDocument/prepareRename`][preparerename]         | ✅ Supported     |                                                               |
@@ -145,14 +145,42 @@ within a few milliseconds, even on large projects.
 | [`textDocument/semanticTokens`][semantictokens]       | ✅ Supported     |                                                               |
 | [`textDocument/signatureHelp`][signaturehelp]         | ✅ Supported     |                                                               |
 | [`textDocument/typeDefinition`][typedefinition]       | ✅ Supported     |                                                               |
-| [`typeHierarchy/*`][typehierarchy]                    | ❌ Not supported | [#534]                                                        |
+| [`typeHierarchy/*`][typehierarchy]                    | ✅ Supported     |                                                               |
 | [`workspace/diagnostic`][workspacediagnostic]         | ✅ Supported     |                                                               |
 | [`workspace/symbol`][workspacesymbol]                 | ✅ Supported     |                                                               |
 | [`workspace/willRenameFiles`][willrenamefiles]        | ❌ Not supported | [#1560]                                                       |
 
+## LSP extensions
+
+ty also supports various nonstandard extensions to the Language Server Protocol. These extensions are a best-effort contract between the server and its clients; when in doubt, consult the implementation.
+
+Client capabilities for these extensions are advertised through the `experimental` field of [`ClientCapabilities`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#clientCapabilities).
+
+### Full diagnostic output
+
+Experimental client capability: `{ "fullDiagnosticOutput": boolean }`
+
+When this capability is `true`, ty includes a human-readable multiline rendering of a diagnostic in the diagnostic's `data` field. The rendering uses only ANSI Select Graphic Rendition (SGR) escape sequences for color and text styling; clients are expected to interpret or strip these sequences before displaying the output.
+
+```ts
+interface Diagnostic {
+    // Standard LSP fields omitted.
+    data?: {
+        /** A human-readable multiline rendering of the diagnostic, including ANSI SGR styles. */
+        rendered?: string;
+
+        /** The original ty diagnostic identifier, such as `invalid-argument-type`. */
+        diagnostic_id?: string;
+
+        // Other ty-specific fields may also be present.
+    };
+}
+```
+
+For diagnostics that support this extension, `rendered` and `diagnostic_id` are either both present or both absent. Clients may use `diagnostic_id` to preserve the original identifier if they replace `Diagnostic.code` with a link to the rendered output. Clients must preserve `Diagnostic.data` when returning a diagnostic in a `textDocument/codeAction` request so that code actions continue to work.
+
 [#1560]: https://github.com/astral-sh/ty/issues/1560
-[#1976]: https://github.com/astral-sh/ty/issues/1976
-[#534]: https://github.com/astral-sh/ty/issues/534
+[#3514]: https://github.com/astral-sh/ty/issues/3514
 [callhierarchy]: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls
 [codeaction]: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeAction
 [codelens]: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeLens

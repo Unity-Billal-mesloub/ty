@@ -86,6 +86,16 @@ tracking issue for a detailed overview of currently supported features.
 
 <!-- markdownlint-disable MD001 -->
 
+#### Which Python versions does ty support?
+
+ty officially supports type checking code that targets Python 3.10 and later. Earlier versions
+(Python 3.7 through 3.9) can still be selected, but may result in false negatives or false
+positives due to a lack of bundled standard library stubs.
+
+The target version is independent of the Python version used to install ty. For example, ty
+installed from PyPI using Python 3.8 or later can type check code targeting Python 3.7; the
+standalone installer does not require Python at all.
+
 #### Why is ty doing \_\_\_\_\_?
 
 See our [typing FAQ](https://docs.astral.sh/ty/reference/typing-faq).

@@ -50,8 +50,7 @@ You can optionally install prek hooks to automatically run the validation checks
 when making a commit:
 
 ```shell
-uv tool install prek
-prek install
+uv run --only-group dev --locked prek install
 ```
 
 ## Building the Python package
@@ -168,6 +167,10 @@ Preparation for the release is automated.
     When running the release workflow for pre-release versions, use the Cargo version format (not PEP
     440), e.g. `0.0.1-alpha.5` (not `0.0.1a5`). For stable releases, these formats are identical.
 
+1. Request a deployment approval from another team member.
+
+    The release workflow will pause at the `release-gate` job until this approval is granted.
+
     The release will automatically be created on GitHub after the distributions are published.
 
 1. Run `uv run --no-project ./scripts/update_schemastore.py`
@@ -183,3 +186,40 @@ Preparation for the release is automated.
 
     The instructions are [in the `ty-vscode`
     repository](https://github.com/astral-sh/ty-vscode/blob/main/CONTRIBUTING.md#release).
+
+## Updating ty's conformance results upstream
+
+One way in which type checkers can be evaluated is by how well they do on the [typing conformance test suite](https://github.com/python/typing/tree/main/conformance),
+which contains a number of assertions to test whether type checkers adhere to the rules laid out in
+the typing spec. ty's results are uploaded to the upstream `python/typing` repo so that users can
+compare ty's conformance score with other type checkers. Updating these results is partially, but
+not fully, automated.
+
+To update ty's conformance results upstream after a release:
+
+1. Clone <https://github.com/python/typing> and checkout a new branch
+1. Run `cd conformance`
+1. Run `uv sync --update-package=ty`
+1. Run `uv run python src/main.py`. This step may update generated fields in TOML files (see below) and/or the `results.html` file.
+1. Check to see if any manual changes are required and apply them as necessary (see below for details).
+1. If you had to make any manual changes as part of the previous step, run `uv run python src/main.py` again. This second run should not update any further TOML files, but is necessary for regenerating `results.html`.
+1. Make a PR to the upstream repo.
+
+### Manual changes that may be required to `.toml` files
+
+The TOML files that contain the results for each type checker are partially generated.
+
+The `conformance_automated`, `output` and `errors_diff` fields are all generated; these should never be altered:
+
+- `output` is the raw output of the type checker on that file.
+- `errors_diff` provides one line of output for every Python line where a diagnostic was expected from ty but didn't occur, and one line of output for every Python line where a diagnostic was not expected from ty but did occur.
+- `conformance_automated`: this will always either be "Pass" (if `errors_diff` is an empty string) or "Fail" (if it is a non-empty string).
+
+The other fields are manually entered and may need to be updated if any of the generated fields in a TOML file are altered by running `uv run python src/main.py`:
+
+- `conformant`: This should be one of three values:
+    - "Unsupported": none of the major features in the Python file are supported by ty
+    - "Partial": some, but not all, of the features and assertions in the Python file are supported by ty. If this is given as the current status, a non-empty `notes` field should be provided that describes which features are currently supported and which are not.
+    - "Pass": this should generally only be used if ty passes all assertions in the Python file and the generated `errors_diff` field is an empty string. In some rare occasions, it *may* be appropriate to label ty as conformant even if there is a non-empty `errors_diff` field, but you will generally need to provide a non-empty `ignore_errors` field if so.
+- `notes`: if the score is given as "Partial" in the `conformant` field, this field should describe which assertions fail and which features are currently unsupported.
+- `ignore_errors`: this is only required if the generated `errors_diff` field is nonempty but the score is nonetheless given as "Conformant". It should be a list of strings. Each string should be an error message that appears in the `errors_diff` field but should nonetheless be ignored when considering whether ty is conformant or not. If ty's score is given as "Conformant" with a non-empty `errors_diff` field, a verification check in CI in the `python/typing` repository will fail unless each error message listed in `errors_diff` is listed in that TOML file's `ignore_errors` field.

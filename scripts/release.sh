@@ -8,6 +8,11 @@
 #
 set -eu
 
+if [ ! -e ruff/.git ]; then
+    echo "Initializing Ruff submodule..."
+    git submodule update --init --recursive ruff
+fi
+
 echo "Checking Ruff submodule status..."
 if git -C ruff diff --quiet; then
     echo "Ruff submodule is clean; continuing..."
@@ -15,6 +20,13 @@ else
     echo "Ruff submodule has uncommitted changes; aborting!"
     exit 1
 fi
+
+# Read the typeshed source commit from the Ruff revision recorded by the
+# superproject, before switching the submodule to its local main branch.
+typeshed_commit_path="crates/ty_vendored/vendor/typeshed/source_commit.txt"
+typeshed_commit_file="ruff/${typeshed_commit_path}"
+old_ruff_commit=$(git rev-parse HEAD:ruff)
+old_typeshed_commit=$(git -C ruff show "${old_ruff_commit}:${typeshed_commit_path}" 2> /dev/null || true)
 
 ruff_head=$(git -C ruff rev-parse --abbrev-ref HEAD)
 case "${ruff_head}" in
@@ -31,7 +43,6 @@ case "${ruff_head}" in
         ;;
 esac
 
-
 echo "Updating Ruff to the latest commit..."
 git -C ruff pull origin main
 git add ruff
@@ -43,8 +54,23 @@ echo "Running rooster..."
 cd "$project_root"
 
 # Generate the changelog and bump versions
-uv run --isolated --only-group release \
+uv run --isolated --only-group release --default-index https://pypi.org/simple \
     rooster release "$@"
+
+# If the typeshed source commit changed and the changelog mentions a typeshed
+# sync, append a link to the typeshed diff so reviewers can see what changed.
+if [ -n "$old_typeshed_commit" ] && [ -f "$typeshed_commit_file" ]; then
+    new_typeshed_commit=$(cat "$typeshed_commit_file")
+    if [ "$old_typeshed_commit" != "$new_typeshed_commit" ]; then
+        typeshed_diff_link="[Typeshed diff](https://github.com/python/typeshed/compare/${old_typeshed_commit}...${new_typeshed_commit})"
+        # Match lines like "- Sync vendored typeshed stubs ([#NNNN](...))".
+        # The pattern anchors on the trailing "))$" so it won't match lines
+        # that already have a typeshed diff link appended.
+        # Use a temp file instead of `sed -i` for macOS/Linux portability.
+        sed "s|\(- Sync vendored typeshed stubs (.*)\))$|\1). ${typeshed_diff_link}|" CHANGELOG.md > CHANGELOG.md.tmp
+        mv CHANGELOG.md.tmp CHANGELOG.md
+    fi
+fi
 
 "${script_root}/autogenerate_files.sh"
 git add ./docs/reference

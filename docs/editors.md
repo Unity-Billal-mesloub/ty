@@ -77,11 +77,11 @@ You can enable ty and disable basedpyright by adding this to your `settings.json
   "languages": {
     "Python": {
       "language_servers": [
-        // Disable basedpyright and enable ty, and otherwise
-        // use the default configuration.
+        // Enable ty and ruff,
+        // Other built-in servers (basedpyright, pyright, pylsp)
+        // are disabled by being omitted from this list.
         "ty",
-        "!basedpyright",
-        "..."
+        "ruff"
       ]
     }
   }
@@ -122,6 +122,22 @@ Starting with version 2025.3, PyCharm users can enable native ty support in the 
 1. Select which options should be enabled.
 
 For more information, refer to [PyCharm documentation](https://www.jetbrains.com/help/pycharm/lsp-tools.html#ty).
+
+## Emacs
+
+ty can be utilized as a language server via the built-in [Eglot](https://www.gnu.org/software/emacs/manual/html_node/eglot/index.html) client, which is part of Emacs since version 29.
+
+```elisp
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '((python-base-mode :language-id "python") . ("ty" "server"))))
+
+(add-hook 'python-base-mode-hook 'eglot-ensure)
+```
+
+If you prefer to view ty's diagnostics through [Flycheck](https://www.flycheck.org/), the
+[flycheck-eglot](https://github.com/flycheck/flycheck-eglot) package bridges Eglot's diagnostics
+to Flycheck.
 
 ## Other editors
 

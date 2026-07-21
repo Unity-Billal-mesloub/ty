@@ -18,9 +18,8 @@ from missing_module import MissingClass  # error: unresolved-import
 reveal_type(MissingClass)  # Unknown
 ```
 
-ty also uses unions with `Unknown` to maintain the
-[gradual guarantee](../features/type-system.md#gradual-guarantee), which helps avoid false positive
-errors in untyped code while still providing useful type information where possible.
+ty also uses unions with `Unknown` to avoid false positive errors in untyped code while still
+providing useful type information where possible.
 
 For example, consider the following untyped `Message` class (which could come from a third-party
 dependency that you have no control over). ty treats the `data` attribute as having type
@@ -46,6 +45,49 @@ msg.data = {"color": "blue"}
 ```
 
 ([Full example in the playground](https://play.ty.dev/862941a8-a3f6-4818-9ea1-d9d59b0bd2fa))
+
+## What is the `@Todo` type and when does it appear?
+
+`@Todo` is ty's way of representing a type that cannot yet be inferred precisely because of a known
+missing feature or incomplete implementation in ty. Like `Any` and `Unknown`, it is a dynamic type,
+so ty allows any operation on it.
+
+Unlike `Any`, `@Todo` does not come from an explicit annotation. Unlike `Unknown`, it does
+not represent missing type information in the code being checked; instead, it indicates a
+limitation in ty itself. It may appear in type hints, `reveal_type()` output, or diagnostics.
+
+`@Todo` is an internal type and cannot be used in annotations. We aim to eliminate all `@Todo` types
+as we implement the missing functionality.
+
+## What is the `Divergent` type and when does it appear?
+
+`Divergent` is ty's way of representing type-level recursion that does not converge. Type inference
+can be recursive; for example, the type of a variable at the end of a loop can depend on its type at
+the beginning. ty analyzes such cycles repeatedly, looking for a stable result. If each iteration
+produces a new type, ty replaces the non-convergent part with `Divergent`.
+
+For example, each iteration of this loop wraps `x` in another list:
+
+```py
+def some_condition() -> bool:
+    ...
+
+
+x = 1
+while some_condition():
+    x = [x]
+
+reveal_type(x)  # Literal[1] | list[Divergent]
+```
+
+After the first analysis of the loop, `x` can be `Literal[1]` or `list[Literal[1]]`. The next
+analysis adds `list[list[Literal[1]]]`, and every subsequent analysis adds another level of nesting.
+This does not converge to a finite type. The revealed type preserves the known base case and uses
+`Divergent` for the infinitely expanding part.
+
+Like `Any` and `Unknown`, `Divergent` is a gradual type, so ty allows any operation on the
+`Divergent` part of a type. Unlike `Unknown`, it does not represent missing type information. It is
+an internal type used by ty and cannot be used in annotations.
 
 ## Why does ty show `int | float` when I annotate something as `float`?
 
@@ -91,6 +133,101 @@ A similar rule applies to `complex`, which is treated as `int | float | complex`
     ([Full example in the playground](https://play.ty.dev/fb034780-3ba7-4c6a-9449-5b0f44128bab))
 
     If you need this for `complex`, you can use `ty_extensions.JustComplex` in a similar way.
+
+## Why can't I use `list[Subtype]` when a `list[Supertype]` is expected? { #invariant-generics }
+
+Let's say you have a class hierarchy with an `Entry` base class as well as `Directory` and `File` subclasses. Since
+a `Directory` *is* an `Entry`, you can use it everywhere an `Entry` is expected.
+You might therefore expect a `list[Directory]` to
+be usable in any context where a `list[Entry]` is expected, but this is not
+the case. The reason for this is mutability:
+
+```py
+# Setup of `Entry`, `Directory`, and `File` classes (1)
+
+def modify(entries: list[Entry]):
+    entries.append(File("README.txt")) # mutation
+
+directories: list[Directory] = [Directory("Downloads"), Directory("Documents")]
+modify(directories)  # ty emits an error on this call
+```
+
+1. The full example might look like this:
+
+    ```py
+    from dataclasses import dataclass
+
+    @dataclass
+    class Entry:
+         path: str
+         def size_bytes(self) -> int: ...
+
+    @dataclass
+    class Directory(Entry):
+        def children(self) -> list[Entry]: ...
+
+    @dataclass
+    class File(Entry):
+        def content(self) -> bytes: ...
+
+    def modify(entries: list[Entry]):
+        entries.append(File("README.txt")) # mutation
+
+    directories: list[Directory] = [Directory("Downloads"), Directory("Documents")]
+    modify(directories)  # ty emits an error on this call
+    ```
+
+    You can try it out in [this playground example](https://play.ty.dev/01013e73-da54-40c4-a9c5-2af269abda9d).
+
+The `modify` call mutates the contents of the `directories` list. After this call,
+it contains two directories *and one `File`*, which clearly violates the
+`list[Directory]` type annotation. If this call *were* allowed, subsequent code
+that relies on the fact that `directories` only contains `Directory` instances might
+break at runtime:
+
+```py
+for directory in directories:
+    directory.children()  # runtime: 'File' object has no attribute 'children'
+```
+
+!!! info
+
+    In type system terminology, we say `list` is *invariant*, which means that
+    just because `A` is a subtype of `B` does not mean that `list[A]` will be a
+    subtype of `list[B]`. The same is true for other builtin collections such as
+    `set` or `dict`. In contrast, read-only collections like `tuple` or
+    `frozenset` are *covariant* in their type parameter. It is safe to assign a
+    `frozenset[bool]` to a `frozenset[int]` because the contents cannot be
+    mutated.
+
+You might run into problems with invariance in situations where mutability isn't
+required:
+
+```py
+def total_size_bytes(entries: list[Entry]) -> int:
+    return sum(entry.size_bytes() for entry in entries)
+
+# inferred as `list[Directory]`
+media_entries = [Directory("Pictures"), Directory("Videos")]
+
+# still a type-check error, but should be fine in principle (no mutation occurs)
+size = total_size_bytes(media_entries)
+```
+
+To prevent this, you can adapt the signature of `total_size_bytes` to take an
+argument of type
+[`Sequence[Entry]`](https://docs.python.org/3/library/collections.abc.html#collections-abstract-base-classes)
+instead. This type describes read-only sequences (that contain values of type
+`Entry`). `Sequence` is therefore covariant in its type parameter.
+
+If you cannot adapt the signature of the function you are calling, you can also
+widen the type of the argument by annotating `media_entries` as `list[Entry]`.
+In some cases it's also a reasonable solution to create a copy of the list
+(`total_size_bytes(list(media_entries))`).
+
+!!! note
+
+    If you are looking for a covariant alternative to `dict[str, V]`, you can use [`Mapping[str, V]`](https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping).
 
 ## Why does ty say `Callable` has no attribute `__name__`?
 
@@ -168,12 +305,26 @@ the developer experience around this in the future.
     You can check out the full example [here](https://play.ty.dev/7a1ea4ab-04e1-4271-adf5-ddc3a5d2fcfd),
     which demonstrates that `FileUpload` instances are no longer accepted by `retry`.
 
+## What is `Top[list[Unknown]]`, and why does it appear?
+
+This type represents "all possible lists of any element type" (as opposed to `list[Unknown]`, which
+represents "a list of some unknown element type"). It usually arises from a check such as
+`if isinstance(x, list):`. If `x` was previously of type `Item | list[Item]`, you might expect this
+check to narrow the type to `list[Item]`, but ty respects the possibility that there could be a
+common subclass of both `Item` and `list` (which may not be a list of `Item`!), and so the narrowed
+type is instead `(Item & Top[list[Unknown]]) | list[Item]`. This code can be made more robust by
+instead checking `if instance(x, Item)`, or by declaring the `Item` type as `@typing.final`.
+
+See also the [discussion
+here](https://docs.astral.sh/ty/features/type-system/#top-and-bottom-materializations) and [in this
+issue](https://github.com/astral-sh/ty/issues/1578).
+
 ## Does ty have a strict mode?
 
-Not yet. A stricter inference mode is tracked in
-[this issue](https://github.com/astral-sh/ty/issues/1240). In the meantime, you can consider using Ruff's
-[`flake8-annotations` rules](https://docs.astral.sh/ruff/rules/#flake8-annotations-ann) to enforce
-more explicit type annotations in your code.
+ty doesn't currently have a flag called `--strict`, but it is reasonably strict by default, and
+there are some easy ways to enable stricter type-checking on your code. See
+[Stricter checking with ty](../coming-from-mypy-or-pyright.md#stricter-checking-with-ty) for more
+details.
 
 ## Why doesn't ty warn about missing type annotations?
 
@@ -273,8 +424,7 @@ You can follow [this issue](https://github.com/astral-sh/ty/issues/691) for upda
 
 ## Is there a pre-commit hook for ty?
 
-Not yet. You can track progress in [this issue](https://github.com/astral-sh/ty/issues/269), which
-also includes some suggested manual hooks you can use in the meantime.
+Yes! You can find it over at <https://github.com/astral-sh/ty-pre-commit>.
 
 ## Does ty support (mypy) plugins?
 
@@ -283,17 +433,3 @@ No. ty does not have a plugin system and there is currently no plan to add one.
 We prefer extending the type system with well-specified features rather than relying on
 type-checker-specific plugins. That said, we are considering adding support for popular third-party
 libraries like pydantic, SQLAlchemy, attrs, or django directly into ty.
-
-## What is `Top[list[Unknown]]`, and why does it appear?
-
-This type represents "all possible lists of any element type" (as opposed to `list[Unknown]`, which
-represents "a list of some unknown element type"). It usually arises from a check such as
-`if isinstance(x, list):`. If `x` was previously of type `Item | list[Item]`, you might expect this
-check to narrow the type to `list[Item]`, but ty respects the possibility that there could be a
-common subclass of both `Item` and `list` (which may not be a list of `Item`!), and so the narrowed
-type is instead `(Item & Top[list[Unknown]]) | list[Item]`. This code can be made more robust by
-instead checking `if instance(x, Item)`, or by declaring the `Item` type as `@typing.final`.
-
-See also the [discussion
-here](https://docs.astral.sh/ty/features/type-system/#top-and-bottom-materializations) and [in this
-issue](https://github.com/astral-sh/ty/issues/1578).

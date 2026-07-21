@@ -13,7 +13,9 @@ Valid severities are:
 * `ignore`: Disable the rule.
 * `warn`: Enable the rule and create a warning diagnostic.
 * `error`: Enable the rule and create an error diagnostic.
-  ty will exit with a non-zero code if any error diagnostics are emitted.
+
+By default, ty exits with code 1 if it emits any warning or error diagnostics.
+Set `terminal.error-on-warning` to `false` to exit with code 0 if all diagnostics have `warning` severity.
 
 **Default value**: `{...}`
 
@@ -158,6 +160,87 @@ Defaults to `true`.
 
 ---
 
+### `strict-literal-narrowing`
+
+Whether equality-based checks should preserve broad builtin types rather than narrow them to
+literal types.
+
+By default, ty narrows `value` from `str` to `Literal["a"]` in the positive branch of
+`value == "a"`. When this option is enabled, `value` remains `str`. This also applies to
+membership tests and literal match patterns, which use equality comparisons.
+
+```python
+from typing import Literal
+
+def parse(value: str) -> Literal["a"] | None:
+    if value == "a":
+        return value  # Accepted by default; `value` remains `str` in strict mode.
+    return None
+```
+
+Broad builtin types include subclasses, but literal types distinguish values by both their
+runtime type and value. This makes the narrowing unsound even for subclasses that inherit
+builtin equality. For example:
+
+```python
+class StringSubclass(str): ...
+
+result = parse(StringSubclass("a"))
+# Statically `Literal["a"] | None`, but `result` has runtime type `StringSubclass`.
+```
+
+The standard library's `StrEnum` and `IntEnum` types are also subclasses of `str` and `int`,
+respectively. This means enum members can encounter the same unsoundness:
+
+```python
+from enum import StrEnum
+
+class Choice(StrEnum):
+    A = "a"
+
+result = parse(Choice.A)
+# Statically `Literal["a"] | None`, but `result` has runtime type `Choice`.
+```
+
+A subclass can also override `__eq__` to compare equal to a literal with a different value:
+
+```python
+class MisleadingStr(str):
+    def __eq__(self, other: object) -> bool:
+        return True
+
+result = parse(MisleadingStr("b"))
+# Statically `Literal["a"] | None`, but `result` contains `"b"` at runtime.
+```
+
+Enable this option to preserve the broader builtin type instead.
+
+Defaults to `false`.
+
+**Default value**: `false`
+
+**Type**: `bool`
+
+**Example usage**:
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.ty.analysis]
+    # Preserve broad builtin types instead of narrowing them to literals
+    strict-literal-narrowing = true
+    ```
+
+=== "ty.toml"
+
+    ```toml
+    [analysis]
+    # Preserve broad builtin types instead of narrowing them to literals
+    strict-literal-narrowing = true
+    ```
+
+---
+
 ## `environment`
 
 ### `extra-paths`
@@ -279,9 +362,13 @@ If no platform is specified, ty will use the current platform:
 
 Specifies the version of Python that will be used to analyze the source code.
 The version should be specified as a string in the format `M.m` where `M` is the major version
-and `m` is the minor (e.g. `"3.0"` or `"3.6"`).
+and `m` is the minor (e.g. `"3.7"` or `"3.12"`).
 If a version is provided, ty will generate errors if the source code makes use of language features
 that are not supported in that version.
+
+ty officially supports type checking code that targets Python 3.10 and later. Python 3.7
+through 3.9 can still be selected, but ty may produce false positives or false negatives for
+standard-library APIs because its bundled stubs do not fully describe those versions.
 
 If a version is not specified, ty will try the following techniques in order of preference
 to determine a value:
@@ -297,7 +384,7 @@ to reflect the differing contents of the standard library across Python versions
 
 **Default value**: `"3.14"`
 
-**Type**: `"3.7" | "3.8" | "3.9" | "3.10" | "3.11" | "3.12" | "3.13" | "3.14" | <major>.<minor>`
+**Type**: `"3.7" | "3.8" | "3.9" | "3.10" | "3.11" | "3.12" | "3.13" | "3.14" | "3.15"`
 
 **Example usage**:
 
@@ -648,6 +735,87 @@ Defaults to `true`.
 
 ---
 
+#### `strict-literal-narrowing`
+
+Whether equality-based checks should preserve broad builtin types rather than narrow them to
+literal types.
+
+By default, ty narrows `value` from `str` to `Literal["a"]` in the positive branch of
+`value == "a"`. When this option is enabled, `value` remains `str`. This also applies to
+membership tests and literal match patterns, which use equality comparisons.
+
+```python
+from typing import Literal
+
+def parse(value: str) -> Literal["a"] | None:
+    if value == "a":
+        return value  # Accepted by default; `value` remains `str` in strict mode.
+    return None
+```
+
+Broad builtin types include subclasses, but literal types distinguish values by both their
+runtime type and value. This makes the narrowing unsound even for subclasses that inherit
+builtin equality. For example:
+
+```python
+class StringSubclass(str): ...
+
+result = parse(StringSubclass("a"))
+# Statically `Literal["a"] | None`, but `result` has runtime type `StringSubclass`.
+```
+
+The standard library's `StrEnum` and `IntEnum` types are also subclasses of `str` and `int`,
+respectively. This means enum members can encounter the same unsoundness:
+
+```python
+from enum import StrEnum
+
+class Choice(StrEnum):
+    A = "a"
+
+result = parse(Choice.A)
+# Statically `Literal["a"] | None`, but `result` has runtime type `Choice`.
+```
+
+A subclass can also override `__eq__` to compare equal to a literal with a different value:
+
+```python
+class MisleadingStr(str):
+    def __eq__(self, other: object) -> bool:
+        return True
+
+result = parse(MisleadingStr("b"))
+# Statically `Literal["a"] | None`, but `result` contains `"b"` at runtime.
+```
+
+Enable this option to preserve the broader builtin type instead.
+
+Defaults to `false`.
+
+**Default value**: `false`
+
+**Type**: `bool`
+
+**Example usage**:
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.ty.overrides.analysis]
+    # Preserve broad builtin types instead of narrowing them to literals
+    strict-literal-narrowing = true
+    ```
+
+=== "ty.toml"
+
+    ```toml
+    [overrides.analysis]
+    # Preserve broad builtin types instead of narrowing them to literals
+    strict-literal-narrowing = true
+    ```
+
+---
+
 ## `src`
 
 ### `exclude`
@@ -850,11 +1018,11 @@ if they exist and are not packages (i.e. they do not contain `__init__.py` or `_
 
 ### `error-on-warning`
 
-Use exit code 1 if there are any warning-level diagnostics.
+Use exit code 1, even if all diagnostics only had `warning` severity.
 
-Defaults to `false`.
+Defaults to `true`.
 
-**Default value**: `false`
+**Default value**: `true`
 
 **Type**: `bool`
 
@@ -864,16 +1032,16 @@ Defaults to `false`.
 
     ```toml
     [tool.ty.terminal]
-    # Error if ty emits any warning-level diagnostics.
-    error-on-warning = true
+    # Exit with code 0 if all diagnostics had `warning` severity.
+    error-on-warning = false
     ```
 
 === "ty.toml"
 
     ```toml
     [terminal]
-    # Error if ty emits any warning-level diagnostics.
-    error-on-warning = true
+    # Exit with code 0 if all diagnostics had `warning` severity.
+    error-on-warning = false
     ```
 
 ---
